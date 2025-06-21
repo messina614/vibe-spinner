@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { 
     getAuth, 
+    signInWithPopup,
     signInWithRedirect, 
     getRedirectResult,
     GoogleAuthProvider, 
@@ -92,39 +93,39 @@ function initializeAppAndAuth() {
         
         console.log('Firebase initialized, setting up auth listener...');
         
-        // Handle redirect result first, then set up auth listener
-        handleRedirectResult().then(() => {
-            // Set up auth listener after handling redirect
-            onAuthStateChanged(auth, async (user) => {
-                console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
-                if (user) {
-                    console.log('User details:', { uid: user.uid, email: user.email, displayName: user.displayName });
-                    currentUser = user;
-                    userIdDisplay.textContent = user.email || user.uid;
+        // Set up auth listener
+        onAuthStateChanged(auth, async (user) => {
+            console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
+            if (user) {
+                console.log('User details:', { uid: user.uid, email: user.email, displayName: user.displayName });
+                currentUser = user;
+                userIdDisplay.textContent = user.email || user.uid;
+                
+                try {
+                    console.log('Loading tags...');
+                    await loadTags();
+                    console.log('Tags loaded successfully');
                     
-                    try {
-                        console.log('Loading tags...');
-                        await loadTags();
-                        console.log('Tags loaded successfully');
-                        
-                        console.log('Setting up Firestore listener...');
-                        setupFirestoreListener();
-                        console.log('Firestore listener set up');
-                        
-                        console.log('Showing main content...');
-                        showMainContent();
-                        console.log('Main content shown');
-                    } catch (error) {
-                        console.error('Error in auth state change handler:', error);
-                        // Still show main content even if there's an error
-                        showMainContent();
-                    }
-                } else {
-                    console.log('Showing login content...');
-                    showLoginContent();
+                    console.log('Setting up Firestore listener...');
+                    setupFirestoreListener();
+                    console.log('Firestore listener set up');
+                    
+                    console.log('Showing main content...');
+                    showMainContent();
+                    console.log('Main content shown');
+                } catch (error) {
+                    console.error('Error in auth state change handler:', error);
+                    // Still show main content even if there's an error
+                    showMainContent();
                 }
-            });
+            } else {
+                console.log('Showing login content...');
+                showLoginContent();
+            }
         });
+        
+        // Handle any pending redirect result
+        handleRedirectResult();
     } catch (error) { 
         console.error("Firebase initialization failed:", error); 
     }
@@ -157,8 +158,25 @@ function showLoginContent() {
 async function signInWithGoogle() {
     try {
         const provider = new GoogleAuthProvider();
-        // Use redirect instead of popup to avoid COOP issues
-        await signInWithRedirect(auth, provider);
+        console.log('Attempting Google sign-in with popup...');
+        
+        try {
+            await signInWithPopup(auth, provider);
+            console.log('Popup sign-in successful');
+        } catch (popupError) {
+            console.log('Popup failed, trying redirect:', popupError);
+            
+            // If popup fails, try redirect
+            if (popupError.code === 'auth/popup-closed-by-user' || 
+                popupError.message.includes('Cross-Origin-Opener-Policy') ||
+                popupError.code === 'auth/popup-blocked') {
+                
+                console.log('Falling back to redirect...');
+                await signInWithRedirect(auth, provider);
+            } else {
+                throw popupError;
+            }
+        }
     } catch (error) {
         console.error("Google sign-in failed:", error);
         alert("Sign-in failed: " + error.message);
@@ -554,6 +572,27 @@ function handleTagClick(button) {
 
 // --- Event Listeners Setup ---
 function setupEventListeners() {
+    console.log('Setting up event listeners...');
+    
+    // Check if all required elements exist
+    const requiredElements = {
+        googleSigninBtn,
+        emailSigninForm,
+        emailInput,
+        passwordInput,
+        signoutBtn,
+        addItemForm,
+        loadingEl,
+        loginSection,
+        mainContentEl,
+        userInfoSection
+    };
+    
+    console.log('Required elements check:');
+    Object.entries(requiredElements).forEach(([name, element]) => {
+        console.log(`${name}:`, element ? 'Found' : 'NOT FOUND');
+    });
+    
     // Authentication listeners
     googleSigninBtn.addEventListener('click', signInWithGoogle);
     emailSigninForm.addEventListener('submit', async (e) => {
