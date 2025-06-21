@@ -40,6 +40,7 @@ const firebaseConfig = window.__firebaseConfig || {
 
 const DEFAULT_TAG_GROUPS = {
     "Type": { tags: ["food", "drink", "place"], logic: "OR" },
+    "Cuisine / Style": { tags: ["italian", "mexican", "sushi", "cafe", "cocktails", "brewery"], logic: "OR", condition: { group: "Type", values: ["food", "drink"] } },
     "Tag": { tags: ["cozy", "lively", "fancy", "casual", "outdoor", "quick", "coffee"], logic: "OR" }
 };
 
@@ -299,33 +300,34 @@ async function updateTagConfigInFirestore() {
 function initializeTagPickers() {
     formTagGroupsEl.innerHTML = '';
     filterTagGroupsEl.innerHTML = '';
-    activeFilters = {};
-    const groupOrder = ["Type", "Cuisine / Style", "Tag"];
-    groupOrder.forEach(groupName => {
-        if (TAG_GROUPS[groupName]) {
-            activeFilters[groupName] = new Set();
-            const { tags } = TAG_GROUPS[groupName];
-            formTagGroupsEl.appendChild(createTagGroup(groupName, tags, 'form'));
-            filterTagGroupsEl.appendChild(createTagGroup(groupName, tags, 'filter'));
+
+    for (const [groupName, groupData] of Object.entries(TAG_GROUPS)) {
+        // For filter bar, only show groups without a 'condition'
+        if (!groupData.condition) {
+            filterTagGroupsEl.appendChild(createTagGroup(groupName, groupData.tags, 'filter'));
         }
-    });
+        // For the form, create all groups
+        formTagGroupsEl.appendChild(createTagGroup(groupName, groupData.tags, 'form'));
+    }
+
+    updateConditionalTagGroups();
 }
 
 function createTagGroup(name, tags, context) {
-    const groupDiv = document.createElement('div');
-    if (name === "Cuisine / Style") {
-        groupDiv.id = `${context}-cuisine-group`;
-        groupDiv.className = 'conditional-group hidden';
+    const groupElement = document.createElement('div');
+    if (TAG_GROUPS[name].condition) {
+        groupElement.classList.add('conditional-group', 'hidden');
+        groupElement.id = `${context}-${name.replace(/ \/ /g, '-')}-group`;
     }
+
+    groupElement.innerHTML = `<h4 class="block text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">${name}</h4>`;
     
-    groupDiv.innerHTML = `<h4 class="block text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">${name}</h4>`;
+    const tagContainer = document.createElement('div');
+    tagContainer.className = 'flex flex-wrap gap-2 items-center';
+    tags.forEach(tag => tagContainer.appendChild(createTagChip(tag, context, name)));
     
-    const container = document.createElement('div');
-    container.className = 'flex flex-wrap gap-2 items-center';
-    tags.forEach(tag => container.appendChild(createTagChip(tag, context, name)));
-    
-    groupDiv.appendChild(container);
-    return groupDiv;
+    groupElement.appendChild(tagContainer);
+    return groupElement;
 }
 
 function createTagChip(tag, context, groupName) {
@@ -334,9 +336,20 @@ function createTagChip(tag, context, groupName) {
     button.textContent = tag;
     button.dataset.tag = tag;
     button.dataset.context = context;
-    button.dataset.group = groupName;
-    const isSelected = context === 'form' ? formSelectedTags.has(tag) : activeFilters[groupName]?.has(tag);
-    button.className = `tag-chip px-4 py-2 text-base font-medium rounded-full cursor-pointer ${isSelected ? 'bg-violet-600 text-white selected' : 'bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-500'}`;
+    button.dataset.group = groupName; // Add group name to button
+    
+    button.addEventListener('click', () => handleTagClick(button));
+
+    if (context === 'filter') {
+        if (activeFilters[groupName] && activeFilters[groupName].includes(tag)) {
+            button.classList.add('selected');
+        }
+    } else { // context === 'form'
+        if (formSelectedTags.has(tag)) {
+            button.classList.add('selected');
+        }
+    }
+    button.className = `tag-chip px-4 py-2 text-base font-medium rounded-full cursor-pointer ${button.classList.contains('selected') ? 'bg-violet-600 text-white selected' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`;
     return button;
 }
 
@@ -346,7 +359,7 @@ function renderTagManagementUI() {
     groupOrder.forEach(groupName => {
         if (TAG_GROUPS[groupName]) {
             const groupDiv = document.createElement('div');
-            groupDiv.innerHTML = `<h4 class="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">${groupName}</h4>`;
+            groupDiv.innerHTML = `<h4 class="text-xl font-semibold text-slate-800 mb-2">${groupName}</h4>`;
 
             const tagList = document.createElement('div');
             tagList.className = 'flex flex-wrap gap-2 mb-3';
@@ -354,7 +367,7 @@ function renderTagManagementUI() {
                 const tagEl = document.createElement('div');
                 tagEl.className = 'relative group';
                 tagEl.innerHTML = `
-                    <span class="bg-slate-200 dark:bg-slate-700 text-base px-4 py-2 rounded-full block">${tag}</span>
+                    <span class="bg-slate-200 text-base px-4 py-2 rounded-full block">${tag}</span>
                     <button class="delete-tag-btn absolute -top-1.5 -right-1.5 bg-slate-400 text-white rounded-full w-5 h-5 text-xs leading-none hidden group-hover:flex items-center justify-center transition-colors hover:bg-red-500" data-group="${groupName}" data-tag="${tag}">&times;</button>
                 `;
                 tagList.appendChild(tagEl);
@@ -364,7 +377,7 @@ function renderTagManagementUI() {
             const addForm = document.createElement('form');
             addForm.className = 'flex gap-2 items-center';
             addForm.innerHTML = `
-                <input type="text" placeholder="Add new ${groupName.toLowerCase()}" class="flex-1 px-3 py-2 text-base bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition">
+                <input type="text" placeholder="Add new ${groupName.toLowerCase()}" class="flex-1 px-3 py-2 text-base bg-slate-100 border border-slate-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition">
                 <button type="submit" class="bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 transition">Add</button>
             `;
             groupDiv.appendChild(addForm);
@@ -440,13 +453,13 @@ function renderItems() {
     } else {
         noResultsContainer.classList.add('hidden');
         itemListEl.innerHTML = filteredItems.map(item => `
-            <div class="list-item bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300">
+            <div class="list-item bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300">
                 <div class="flex justify-between items-start mb-2">
-                    <h3 class="text-xl font-semibold text-slate-900 dark:text-white">${item.name}</h3>
+                    <h3 class="text-xl font-semibold text-slate-900">${item.name}</h3>
                     <p class="text-xs text-slate-400 text-right">Added by:<br>${item.createdByName || 'unknown'}</p>
                 </div>
                 <div class="flex flex-wrap gap-2 mt-2">
-                    ${(item.tags || []).map(tag => `<span class="bg-violet-100 dark:bg-violet-900 text-violet-800 dark:text-violet-200 px-3 py-1 rounded-full text-sm">${tag}</span>`).join('')}
+                    ${(item.tags || []).map(tag => `<span class="bg-violet-100 text-violet-800 px-3 py-1 rounded-full text-sm">${tag}</span>`).join('')}
                 </div>
             </div>
         `).join('');
@@ -455,13 +468,13 @@ function renderItems() {
 
 function renderAllItemsList() {
     allItemsListEl.innerHTML = allItems.map(item => `
-        <div class="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-700 rounded-lg">
+        <div class="flex justify-between items-center p-4 bg-slate-50 rounded-lg">
             <div class="flex-1">
-                <h4 class="font-semibold text-slate-900 dark:text-white">${item.name}</h4>
+                <h4 class="font-semibold text-slate-900">${item.name}</h4>
                 <div class="flex flex-wrap gap-1 mt-1">
-                    ${item.tags.map(tag => `<span class="bg-violet-100 dark:bg-violet-900 text-violet-800 dark:text-violet-200 px-2 py-1 rounded-full text-xs">${tag}</span>`).join('')}
+                    ${item.tags.map(tag => `<span class="bg-violet-100 text-violet-800 px-2 py-1 rounded-full text-xs">${tag}</span>`).join('')}
                 </div>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <p class="text-xs text-slate-500 mt-1">
                     Added by ${item.createdByName || 'Unknown'} on ${item.createdAt?.toDate().toLocaleDateString() || 'Unknown date'}
                 </p>
             </div>
@@ -512,9 +525,13 @@ async function handleDeleteItem(itemId) {
 }
 
 function handleGlobalClick(e) {
-    // Handle tag clicks
-    if (e.target.classList.contains('tag-chip')) {
-        handleTagClick(e.target);
+    // Modal closing logic for "All Places"
+    if (!viewAllSection.classList.contains('hidden')) {
+        const managementContainer = viewAllSection.querySelector('.bg-white');
+        if (managementContainer && !managementContainer.contains(e.target) && !viewAllBtn.contains(e.target)) {
+            viewAllSection.classList.add('hidden');
+            viewAllBtn.classList.remove('hidden');
+        }
     }
     
     // Handle delete tag buttons
@@ -526,12 +543,32 @@ function handleGlobalClick(e) {
     
     // Handle delete item buttons
     if (e.target.classList.contains('delete-item-btn')) {
-        const itemId = e.target.dataset.itemId;
-        if (confirm('Are you sure you want to delete this place?')) {
+        const button = e.target;
+        const itemId = button.dataset.itemId;
+        if (button.classList.contains('confirm-delete')) {
             handleDeleteItem(itemId);
+        } else {
+            // First click, add confirmation class and text
+            button.classList.add('confirm-delete');
+            button.textContent = 'Sure?';
+            // Set timeout to revert button state
+            setTimeout(() => {
+                if (button.classList.contains('confirm-delete')) {
+                    button.classList.remove('confirm-delete');
+                    button.innerHTML = '&times;';
+                }
+            }, 3000); // 3 seconds to confirm
         }
     }
-    
+
+    // Reset other delete buttons
+    document.querySelectorAll('.delete-item-btn.confirm-delete').forEach(btn => {
+        if (btn !== e.target) {
+            btn.classList.remove('confirm-delete');
+            btn.innerHTML = '&times;';
+        }
+    });
+
     // Handle add new tag forms
     if (e.target.closest('form') && e.target.type === 'submit' && e.target.closest('#manage-tags-section')) {
         e.preventDefault();
@@ -546,38 +583,76 @@ function handleGlobalClick(e) {
     }
 }
 
+function updateConditionalTagGroups() {
+    const isFoodOrDrinkSelected = formSelectedTags.has('food') || formSelectedTags.has('drink');
+    const cuisineGroup = document.getElementById('form-Cuisine-Style-group');
+    if (cuisineGroup) {
+        if (isFoodOrDrinkSelected) {
+            cuisineGroup.classList.remove('hidden');
+        } else {
+            cuisineGroup.classList.add('hidden');
+            // Also deselect any cuisine tags if the parent condition is no longer met
+            TAG_GROUPS['Cuisine / Style'].tags.forEach(tag => {
+                if (formSelectedTags.has(tag)) {
+                    formSelectedTags.delete(tag);
+                    const tagButton = formTagGroupsEl.querySelector(`[data-tag="${tag}"]`);
+                    if (tagButton) {
+                        tagButton.classList.remove('selected');
+                    }
+                }
+            });
+        }
+    }
+}
+
 function handleTagClick(button) {
     const tag = button.textContent;
     const groupName = button.dataset.group;
-    const isSelected = button.classList.contains('selected');
+    const context = button.dataset.context;
 
-    if (!activeFilters[groupName]) {
-        activeFilters[groupName] = [];
-    }
-    
-    const currentGroupFilters = activeFilters[groupName];
-    const groupLogic = TAG_GROUPS[groupName]?.logic || 'OR';
-
-    if (isSelected) {
-        // Deselect
-        button.classList.remove('selected');
-        const index = currentGroupFilters.indexOf(tag);
-        if (index > -1) {
-            currentGroupFilters.splice(index, 1);
+    if (context === 'form') {
+        const isSelected = button.classList.contains('selected');
+        if (isSelected) {
+            formSelectedTags.delete(tag);
+            button.classList.remove('selected');
+        } else {
+            formSelectedTags.add(tag);
+            button.classList.add('selected');
         }
-    } else {
-        // Select
-        if (groupLogic === 'OR') {
-            // If OR logic, deselect other tags in the same group first
-            const groupButtons = filterTagGroupsEl.querySelectorAll(`[data-group="${groupName}"]`);
-            groupButtons.forEach(btn => btn.classList.remove('selected'));
+        updateConditionalTagGroups();
+    } else { // context === 'filter'
+        const isSelected = button.classList.contains('selected');
+
+        if (!activeFilters[groupName]) {
             activeFilters[groupName] = [];
         }
-        button.classList.add('selected');
-        activeFilters[groupName].push(tag);
+        
+        const currentGroupFilters = activeFilters[groupName];
+        const groupLogic = TAG_GROUPS[groupName]?.logic || 'OR';
+
+        if (isSelected) {
+            // Deselect
+            button.classList.remove('selected');
+            const index = currentGroupFilters.indexOf(tag);
+            if (index > -1) {
+                currentGroupFilters.splice(index, 1);
+            }
+        } else {
+            // Select
+            if (groupLogic === 'OR') {
+                // For OR logic, we allow only one selection per group in the filter.
+                // Deselect other tags in the same group first.
+                const groupButtons = filterTagGroupsEl.querySelectorAll(`[data-group="${groupName}"].selected`);
+                groupButtons.forEach(btn => {
+                    btn.classList.remove('selected');
+                });
+                activeFilters[groupName] = [];
+            }
+            button.classList.add('selected');
+            activeFilters[groupName].push(tag);
+        }
     }
 
-    console.log('Active Filters:', JSON.stringify(activeFilters));
     renderItems();
 }
 
