@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VibeSpinner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="config.js"></script>
+    <script type="module" src="app.js"></script>
+</head>
+<body class="text-slate-800 dark:text-slate-200 text-base md:text-lg">
+
+    <div id="app-container" class="container mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
+        
+        <header class="text-center mb-8 fade-in">
+            <h1 class="text-5xl sm:text-6xl font-bold text-slate-900 dark:text-white">VibeSpinner</h1>
+            <p class="mt-2 text-xl text-slate-600 dark:text-slate-400">Find your next favorite spot.</p>
+        </header>
+
+        <div id="loading" class="text-center p-8">
+            <p class="text-slate-500 dark:text-slate-400">Loading your vibes...</p>
+        </div>
+
+        <main id="main-content" class="hidden">
+            <!-- Filter Section -->
+            <section class="mb-8 fade-in" style="animation-delay: 100ms;">
+                 <h2 class="text-3xl sm:text-4xl font-semibold mb-4 text-slate-900 dark:text-white">Find a Vibe</h2>
+                 <div id="filter-tag-groups" class="p-6 bg-white dark:bg-slate-800 rounded-xl shadow-lg space-y-6">
+                    <!-- JS will populate this -->
+                 </div>
+            </section>
+
+            <!-- Item List -->
+            <section id="results-section" class="mb-8 fade-in hidden" style="animation-delay: 200ms;">
+                <h2 class="text-3xl sm:text-4xl font-semibold mb-4 text-slate-900 dark:text-white">Results</h2>
+                <div id="item-list" class="space-y-4"></div>
+                <div id="no-results-container" class="hidden text-center text-slate-500 dark:text-slate-400 p-8 bg-white dark:bg-slate-800 rounded-xl shadow-sm">
+                    <p class="font-semibold">No places match your selected filters.</p>
+                </div>
+            </section>
+
+            <!-- All Places (Management) Section -->
+            <section id="management-section" class="fade-in" style="animation-delay: 300ms;">
+                 <div class="text-center">
+                    <button id="view-all-btn" class="w-full sm:w-auto bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold py-3 px-8 text-lg rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 dark:focus:ring-offset-slate-800 transition">
+                        All Places
+                    </button>
+                 </div>
+                <div id="view-all-section" class="mt-4 hidden">
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-3xl sm:text-4xl font-semibold text-slate-900 dark:text-white">Manage Places</h2>
+                            <button id="close-view-all-btn" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 text-3xl leading-none">&times;</button>
+                        </div>
+                        <div id="all-items-list" class="space-y-3 mb-6"></div>
+
+                        <!-- Add New Item Form (inside management) -->
+                        <div class="border-t border-slate-200 dark:border-slate-700 pt-6">
+                             <h3 class="text-2xl font-semibold mb-4 text-slate-900 dark:text-white">Add New Place</h3>
+                             <form id="add-item-form" class="space-y-4">
+                                <div>
+                                    <label for="item-name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Name</label>
+                                    <input type="text" id="item-name" placeholder="e.g., The Cozy Cafe" class="w-full px-4 py-3 text-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 outline-none transition">
+                                </div>
+                                <div id="form-tag-groups" class="space-y-6 pt-2"></div>
+                                <button type="submit" class="w-full bg-violet-600 text-white font-semibold py-3 px-4 text-lg rounded-lg hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 dark:focus:ring-offset-slate-800 transition-transform transform hover:scale-105 active:scale-100">
+                                    Add Place
+                                </button>
+                            </form>
+                        </div>
+
+                         <!-- Manage Tags Section -->
+                        <div id="manage-tags-section" class="border-t border-slate-200 dark:border-slate-700 pt-6 mt-6">
+                            <h3 class="text-2xl font-semibold mb-4 text-slate-900 dark:text-white">Manage Tags</h3>
+                            <div class="space-y-6">
+                                <!-- Tag management UI will be injected here -->
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+        </main>
+        
+        <footer class="text-center mt-12 fade-in" style="animation-delay: 500ms;">
+            <p class="text-xs text-slate-400 dark:text-slate-500">Your User ID (for collaboration):</p>
+            <p id="user-id-display" class="text-xs text-slate-500 dark:text-slate-600 font-mono bg-slate-200 dark:bg-slate-800 rounded px-2 py-1 inline-block mt-1 break-all"></p>
+        </footer>
+    </div>
+
+</body>
+</html>
