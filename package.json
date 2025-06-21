@@ -1,0 +1,12 @@
+{
+  "name": "vibe-spinner",
+  "version": "1.0.0",
+  "description": "A web app for finding your next favorite spot",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "echo 'Development: Use config.js directly'"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+} 
