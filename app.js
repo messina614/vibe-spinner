@@ -49,6 +49,7 @@ let db, auth, currentUser, unsubscribeItems;
 let TAG_GROUPS = JSON.parse(JSON.stringify(DEFAULT_TAG_GROUPS));
 let allItems = [];
 let formSelectedTags = new Set();
+let editFormSelectedTags = new Set();
 let activeFilters = {};
 
 // --- DOM Elements ---
@@ -78,6 +79,15 @@ const closeViewAllBtn = document.getElementById('close-view-all-btn');
 const allItemsListEl = document.getElementById('all-items-list');
 const manageTagsSection = document.getElementById('manage-tags-section').querySelector('.space-y-6');
 const userIdDisplay = document.getElementById('user-id-display');
+
+const editItemModal = document.getElementById('edit-item-modal');
+const editItemForm = document.getElementById('edit-item-form');
+const editItemIdInput = document.getElementById('edit-item-id');
+const editItemNameInput = document.getElementById('edit-item-name');
+const editFormTagGroupsEl = document.getElementById('edit-form-tag-groups');
+const editModalCloseBtn = document.getElementById('edit-modal-close-btn');
+const editModalCancelBtn = document.getElementById('edit-modal-cancel-btn');
+
 
 // --- Main App Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -346,15 +356,19 @@ function createTagChip(tag, context, groupName) {
     
     button.addEventListener('click', () => handleTagClick(button));
 
-    if (context === 'filter') {
-        if (activeFilters[groupName] && activeFilters[groupName].includes(tag)) {
-            button.classList.add('selected');
-        }
-    } else { // context === 'form'
-        if (formSelectedTags.has(tag)) {
-            button.classList.add('selected');
-        }
+    let isSelected;
+    if (context === 'form') {
+        isSelected = formSelectedTags.has(tag);
+    } else if (context === 'edit') {
+        isSelected = editFormSelectedTags.has(tag);
+    } else { // filter
+        isSelected = activeFilters[groupName] && activeFilters[groupName].includes(tag);
     }
+
+    if (isSelected) {
+        button.classList.add('selected');
+    }
+    
     button.className = `tag-chip px-4 py-2 text-base font-medium rounded-full cursor-pointer ${button.classList.contains('selected') ? 'bg-violet-600 text-white selected' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`;
     return button;
 }
@@ -478,13 +492,16 @@ function renderAllItemsList() {
             <div class="flex-1">
                 <h4 class="font-semibold text-slate-900">${item.name}</h4>
                 <div class="flex flex-wrap gap-1 mt-1">
-                    ${item.tags.map(tag => `<span class="bg-violet-100 text-violet-800 px-2 py-1 rounded-full text-xs">${tag}</span>`).join('')}
+                    ${(item.tags || []).map(tag => `<span class="bg-violet-100 text-violet-800 px-2 py-1 rounded-full text-xs">${tag}</span>`).join('')}
                 </div>
                 <p class="text-xs text-slate-500 mt-1">
                     Added by ${item.createdByName || 'Unknown'} on ${item.createdAt?.toDate().toLocaleDateString() || 'Unknown date'}
                 </p>
             </div>
-            <button class="delete-item-btn ml-4 text-red-500 hover:text-red-700 text-lg font-bold" data-item-id="${item.id}">&times;</button>
+            <div class="flex items-center gap-3">
+                <button class="edit-item-btn text-sm font-medium text-slate-600 hover:text-violet-600 p-2" data-item-id="${item.id}">Edit</button>
+                <button class="delete-item-btn text-lg font-bold text-red-500 hover:text-red-700 w-6 h-6" data-item-id="${item.id}">&times;</button>
+            </div>
         </div>
     `).join('');
 }
@@ -567,6 +584,11 @@ function handleGlobalClick(e) {
         }
     }
 
+    if (e.target.classList.contains('edit-item-btn')) {
+        const itemId = e.target.dataset.itemId;
+        openEditModal(itemId);
+    }
+
     // Reset other delete buttons
     document.querySelectorAll('.delete-item-btn.confirm-delete').forEach(btn => {
         if (btn !== e.target) {
@@ -589,25 +611,28 @@ function handleGlobalClick(e) {
     }
 }
 
-function updateConditionalTagGroups() {
-    const isFoodOrDrinkSelected = formSelectedTags.has('food') || formSelectedTags.has('drink');
-    const cuisineGroup = document.getElementById('form-Cuisine-Style-group');
-    if (cuisineGroup) {
-        if (isFoodOrDrinkSelected) {
-            cuisineGroup.classList.remove('hidden');
-        } else {
-            cuisineGroup.classList.add('hidden');
-            // Also deselect any cuisine tags if the parent condition is no longer met
-            TAG_GROUPS['Cuisine / Style'].tags.forEach(tag => {
-                if (formSelectedTags.has(tag)) {
-                    formSelectedTags.delete(tag);
-                    const tagButton = formTagGroupsEl.querySelector(`[data-tag="${tag}"]`);
-                    if (tagButton) {
-                        tagButton.classList.remove('selected');
-                    }
+function updateConditionalTagGroups(context = 'form') {
+    const selectedTags = context === 'edit' ? editFormSelectedTags : formSelectedTags;
+    const cuisineGroup = document.getElementById(`${context}-Cuisine-Style-group`);
+    
+    if (!cuisineGroup) return;
+
+    const isFoodOrDrinkSelected = selectedTags.has('food') || selectedTags.has('drink');
+
+    if (isFoodOrDrinkSelected) {
+        cuisineGroup.classList.remove('hidden');
+    } else {
+        cuisineGroup.classList.add('hidden');
+        // Also deselect any cuisine tags if the parent condition is no longer met
+        TAG_GROUPS['Cuisine / Style'].tags.forEach(tag => {
+            if (selectedTags.has(tag)) {
+                selectedTags.delete(tag);
+                const tagButton = (context === 'edit' ? editFormTagGroupsEl : formTagGroupsEl).querySelector(`[data-tag="${tag}"]`);
+                if (tagButton) {
+                    tagButton.classList.remove('selected');
                 }
-            });
-        }
+            }
+        });
     }
 }
 
@@ -616,16 +641,23 @@ function handleTagClick(button) {
     const groupName = button.dataset.group;
     const context = button.dataset.context;
 
+    let targetSet;
     if (context === 'form') {
+        targetSet = formSelectedTags;
+    } else if (context === 'edit') {
+        targetSet = editFormSelectedTags;
+    }
+
+    if (targetSet) { // logic for form and edit contexts
         const isSelected = button.classList.contains('selected');
         if (isSelected) {
-            formSelectedTags.delete(tag);
+            targetSet.delete(tag);
             button.classList.remove('selected');
         } else {
-            formSelectedTags.add(tag);
+            targetSet.add(tag);
             button.classList.add('selected');
         }
-        updateConditionalTagGroups();
+        updateConditionalTagGroups(context);
     } else { // context === 'filter'
         const isSelected = button.classList.contains('selected');
 
@@ -659,8 +691,61 @@ function handleTagClick(button) {
         }
     }
 
-    renderItems();
+    if (context === 'filter') {
+        renderItems();
+    }
 }
+
+// --- Edit Modal Functions ---
+function openEditModal(itemId) {
+    const item = allItems.find(i => i.id === itemId);
+    if (!item) return;
+
+    editItemIdInput.value = item.id;
+    editItemNameInput.value = item.name;
+    editFormSelectedTags = new Set(item.tags || []);
+    
+    // Render tags for the edit form
+    editFormTagGroupsEl.innerHTML = '';
+    const groupOrder = ["Type", "Cuisine / Style", "Tag"];
+    for (const groupName of groupOrder) {
+        const groupData = TAG_GROUPS[groupName];
+        if (groupData) {
+            editFormTagGroupsEl.appendChild(createTagGroup(groupName, groupData.tags, 'edit'));
+        }
+    }
+    
+    updateConditionalTagGroups('edit');
+    editItemModal.classList.remove('hidden');
+}
+
+function closeEditModal() {
+    editItemModal.classList.add('hidden');
+}
+
+async function handleEditItemSubmit(e) {
+    e.preventDefault();
+    const itemId = editItemIdInput.value;
+    const newName = editItemNameInput.value.trim();
+    if (!itemId || !newName) return;
+
+    const updatedData = {
+        name: newName,
+        tags: Array.from(editFormSelectedTags),
+        updatedBy: currentUser.uid,
+        updatedAt: serverTimestamp()
+    };
+
+    try {
+        const itemRef = doc(db, 'data', appId, 'items', itemId);
+        await updateDoc(itemRef, updatedData);
+        closeEditModal();
+    } catch (error) {
+        console.error("Error updating item:", error);
+        alert("Failed to update item: " + error.message);
+    }
+}
+
 
 // --- Event Listeners Setup ---
 function setupEventListeners() {
@@ -717,4 +802,9 @@ function setupEventListeners() {
         viewAllSection.classList.add('hidden');
         viewAllBtn.classList.remove('hidden');
     });
+
+    // Edit Modal Listeners
+    editItemForm.addEventListener('submit', handleEditItemSubmit);
+    editModalCloseBtn.addEventListener('click', closeEditModal);
+    editModalCancelBtn.addEventListener('click', closeEditModal);
 } 
