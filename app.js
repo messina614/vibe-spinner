@@ -598,21 +598,30 @@ function handleGlobalClick(e) {
 
 function updateConditionalTagGroups(context = 'form') {
     const selectedTags = context === 'edit' ? editFormSelectedTags : formSelectedTags;
+    const containerEl = context === 'edit' ? editFormTagGroupsEl : formTagGroupsEl;
     const cuisineGroup = document.getElementById(`${context}-Cuisine-Style-group`);
     
     if (!cuisineGroup) return;
 
-    const isFoodOrDrinkSelected = selectedTags.has('food') || selectedTags.has('drink');
+    const isFoodSelected = selectedTags.has('food');
 
-    if (isFoodOrDrinkSelected) {
+    // Handle visibility. In edit mode, it's always visible. In form mode, it depends on 'food'.
+    if (context === 'form') {
+        if (isFoodSelected) {
+            cuisineGroup.classList.remove('hidden');
+        } else {
+            cuisineGroup.classList.add('hidden');
+        }
+    } else { // context === 'edit'
         cuisineGroup.classList.remove('hidden');
-    } else {
-        cuisineGroup.classList.add('hidden');
-        // Also deselect any cuisine tags if the parent condition is no longer met
+    }
+
+    // Handle de-selecting cuisine tags if 'food' is not selected. This applies to both contexts.
+    if (!isFoodSelected) {
         TAG_GROUPS['Cuisine / Style'].tags.forEach(tag => {
             if (selectedTags.has(tag)) {
                 selectedTags.delete(tag);
-                const tagButton = (context === 'edit' ? editFormTagGroupsEl : formTagGroupsEl).querySelector(`[data-tag="${tag}"]`);
+                const tagButton = containerEl.querySelector(`[data-context="${context}"][data-tag="${tag}"]`);
                 if (tagButton) {
                     tagButton.classList.remove('selected');
                 }
