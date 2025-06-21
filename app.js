@@ -301,13 +301,19 @@ function initializeTagPickers() {
     formTagGroupsEl.innerHTML = '';
     filterTagGroupsEl.innerHTML = '';
 
-    for (const [groupName, groupData] of Object.entries(TAG_GROUPS)) {
-        // For filter bar, only show groups without a 'condition'
-        if (!groupData.condition) {
-            filterTagGroupsEl.appendChild(createTagGroup(groupName, groupData.tags, 'filter'));
+    const groupOrder = ["Type", "Cuisine / Style", "Tag"];
+
+    for (const groupName of groupOrder) {
+        const groupData = TAG_GROUPS[groupName];
+        if (groupData) {
+            // For the form, create all groups
+            formTagGroupsEl.appendChild(createTagGroup(groupName, groupData.tags, 'form'));
+
+            // For filter bar, only show groups without a 'condition'
+            if (!groupData.condition) {
+                filterTagGroupsEl.appendChild(createTagGroup(groupName, groupData.tags, 'filter'));
+            }
         }
-        // For the form, create all groups
-        formTagGroupsEl.appendChild(createTagGroup(groupName, groupData.tags, 'form'));
     }
 
     updateConditionalTagGroups();
