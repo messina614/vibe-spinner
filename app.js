@@ -5,8 +5,6 @@ import {
     signInWithRedirect, 
     getRedirectResult,
     GoogleAuthProvider, 
-    createUserWithEmailAndPassword, 
-    signInWithEmailAndPassword,
     onAuthStateChanged, 
     signOut 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -208,19 +206,6 @@ async function handleRedirectResult() {
         console.error("Redirect sign-in failed:", error);
         // Don't show alert here, let the auth state change handle it
         console.log('Redirect error details:', error);
-    }
-}
-
-async function signInWithEmail(email, password, isSignUp = false) {
-    try {
-        if (isSignUp) {
-            await createUserWithEmailAndPassword(auth, email, password);
-        } else {
-            await signInWithEmailAndPassword(auth, email, password);
-        }
-    } catch (error) {
-        console.error("Email sign-in failed:", error);
-        alert("Sign-in failed: " + error.message);
     }
 }
 
@@ -754,9 +739,6 @@ function setupEventListeners() {
     // Check if all required elements exist
     const requiredElements = {
         googleSigninBtn,
-        emailSigninForm,
-        emailInput,
-        passwordInput,
         signoutBtn,
         addItemForm,
         loadingEl,
@@ -772,23 +754,6 @@ function setupEventListeners() {
     
     // Authentication listeners
     googleSigninBtn.addEventListener('click', signInWithGoogle);
-    emailSigninForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = emailInput.value.trim();
-        const password = passwordInput.value;
-        if (!email || !password) return;
-        
-        // Try sign-in first, if it fails, try sign-up
-        try {
-            await signInWithEmail(email, password, false);
-        } catch (error) {
-            if (error.code === 'auth/user-not-found') {
-                await signInWithEmail(email, password, true);
-            } else {
-                throw error;
-            }
-        }
-    });
     signoutBtn.addEventListener('click', signOutUser);
     
     // Existing app listeners
