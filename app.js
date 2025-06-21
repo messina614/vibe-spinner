@@ -156,19 +156,8 @@ function showLoginContent() {
 async function signInWithGoogle() {
     try {
         const provider = new GoogleAuthProvider();
-        // Try popup first, fallback to redirect if it fails
-        try {
-            await signInWithPopup(auth, provider);
-        } catch (popupError) {
-            console.log('Popup failed, trying redirect:', popupError);
-            // If popup fails due to COOP or other issues, fall back to redirect
-            if (popupError.code === 'auth/popup-closed-by-user' || 
-                popupError.message.includes('Cross-Origin-Opener-Policy')) {
-                await signInWithRedirect(auth, provider);
-            } else {
-                throw popupError;
-            }
-        }
+        // Use redirect instead of popup to avoid COOP issues
+        await signInWithRedirect(auth, provider);
     } catch (error) {
         console.error("Google sign-in failed:", error);
         alert("Sign-in failed: " + error.message);
