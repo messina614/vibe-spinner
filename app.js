@@ -40,7 +40,6 @@ const firebaseConfig = window.__firebaseConfig || {
 
 const DEFAULT_TAG_GROUPS = {
     "Type": { tags: ["food", "drink", "place"], logic: "OR" },
-    "Cuisine / Style": { tags: ["italian", "mexican", "sushi", "cafe", "cocktails", "brewery"], logic: "OR" },
     "Tag": { tags: ["cozy", "lively", "fancy", "casual", "outdoor", "quick", "coffee"], logic: "OR" }
 };
 
@@ -376,62 +375,82 @@ function renderTagManagementUI() {
 
 // --- Firestore Listener (Updated for shared collections) ---
 function setupFirestoreListener() {
-    if (!currentUser) return;
-    
-    if (unsubscribeItems) unsubscribeItems();
-    
-    // CORRECTED PATH: Listen to shared items collection
-    const itemsQuery = query(
-        collection(db, 'data', appId, 'items'),
-        orderBy('createdAt', 'desc')
-    );
-    
-    unsubscribeItems = onSnapshot(itemsQuery, (snapshot) => {
-        allItems = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+    if (!currentUser || unsubscribeItems) return;
+
+    const itemsCol = collection(db, 'data', appId, 'items');
+    const q = query(itemsCol, orderBy('createdAt', 'desc'));
+
+    unsubscribeItems = onSnapshot(q, (snapshot) => {
+        allItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log(`Firestore listener updated: ${allItems.length} items loaded.`);
         renderItems();
         renderAllItemsList();
+    }, (error) => {
+        console.error("Error with Firestore listener:", error);
     });
 }
 
 // --- Rendering Functions ---
 function filterItems() {
-    const activeFilterTags = Object.values(activeFilters).flatMap(set => Array.from(set));
-    if (activeFilterTags.length === 0) return allItems;
-    
+    const activeGroups = Object.keys(activeFilters).filter(group => activeFilters[group].length > 0);
+
+    if (activeGroups.length === 0) {
+        return []; // Return empty array if no filters are active at all.
+    }
+
     return allItems.filter(item => {
-        if (!item.tags) return false;
-        return activeFilterTags.every(tag => item.tags.includes(tag));
+        if (!item.tags || item.tags.length === 0) return false;
+        const itemTags = new Set(item.tags);
+
+        // Check each group with active filters
+        return activeGroups.every(groupName => {
+            const groupFilters = activeFilters[groupName]; // this is an array of tags
+            if (!groupFilters || groupFilters.length === 0) return true;
+
+            const groupLogic = TAG_GROUPS[groupName]?.logic || "OR";
+
+            if (groupLogic === "OR") {
+                // Item must have at least one of the selected tags in this group
+                return groupFilters.some(tag => itemTags.has(tag));
+            } else { // AND logic
+                // Item must have all of the selected tags in this group
+                return groupFilters.every(tag => itemTags.has(tag));
+            }
+        });
     });
 }
 
 function renderItems() {
-    const filteredItems = filterItems();
-    
-    if (filteredItems.length === 0) {
+    const activeFilterCount = Object.values(activeFilters).reduce((count, tags) => count + tags.length, 0);
+
+    if (activeFilterCount === 0) {
         resultsSection.classList.add('hidden');
-        noResultsContainer.classList.remove('hidden');
+        itemListEl.innerHTML = '';
+        noResultsContainer.classList.add('hidden');
         return;
     }
+
+    const filteredItems = filterItems();
     
     resultsSection.classList.remove('hidden');
-    noResultsContainer.classList.add('hidden');
-    
-    itemListEl.innerHTML = filteredItems.map(item => `
-        <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
-            <div class="flex justify-between items-start mb-3">
-                <h3 class="text-xl font-semibold text-slate-900 dark:text-white">${item.name}</h3>
-                <div class="text-xs text-slate-500 dark:text-slate-400">
-                    Added by ${item.createdByName || 'Unknown'}
+
+    if (filteredItems.length === 0) {
+        noResultsContainer.classList.remove('hidden');
+        itemListEl.innerHTML = '';
+    } else {
+        noResultsContainer.classList.add('hidden');
+        itemListEl.innerHTML = filteredItems.map(item => `
+            <div class="list-item bg-white dark:bg-slate-800 p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300">
+                <div class="flex justify-between items-start mb-2">
+                    <h3 class="text-xl font-semibold text-slate-900 dark:text-white">${item.name}</h3>
+                    <p class="text-xs text-slate-400 text-right">Added by:<br>${item.createdByName || 'unknown'}</p>
+                </div>
+                <div class="flex flex-wrap gap-2 mt-2">
+                    ${(item.tags || []).map(tag => `<span class="bg-violet-100 dark:bg-violet-900 text-violet-800 dark:text-violet-200 px-3 py-1 rounded-full text-sm">${tag}</span>`).join('')}
                 </div>
             </div>
-            <div class="flex flex-wrap gap-2">
-                ${item.tags.map(tag => `<span class="bg-violet-100 dark:bg-violet-900 text-violet-800 dark:text-violet-200 px-3 py-1 rounded-full text-sm">${tag}</span>`).join('')}
-            </div>
-        </div>
-    `).join('');
+        `).join('');
+    }
 }
 
 function renderAllItemsList() {
@@ -528,49 +547,38 @@ function handleGlobalClick(e) {
 }
 
 function handleTagClick(button) {
-    const tag = button.dataset.tag;
-    const context = button.dataset.context;
+    const tag = button.textContent;
     const groupName = button.dataset.group;
-    
-    if (context === 'form') {
-        if (formSelectedTags.has(tag)) {
-            formSelectedTags.delete(tag);
-            button.classList.remove('bg-violet-600', 'text-white', 'selected');
-            button.classList.add('bg-slate-200', 'dark:bg-slate-600', 'text-slate-700', 'dark:text-slate-200');
-        } else {
-            formSelectedTags.add(tag);
-            button.classList.add('bg-violet-600', 'text-white', 'selected');
-            button.classList.remove('bg-slate-200', 'dark:bg-slate-600', 'text-slate-700', 'dark:text-slate-200');
-        }
-        
-        // Show/hide cuisine group based on type selection
-        if (groupName === 'Type') {
-            const cuisineGroup = document.getElementById('form-cuisine-group');
-            if (cuisineGroup) {
-                if (tag === 'food' || tag === 'drink') {
-                    cuisineGroup.classList.remove('hidden');
-                } else {
-                    cuisineGroup.classList.add('hidden');
-                    // Remove cuisine tags from selection
-                    TAG_GROUPS['Cuisine / Style'].tags.forEach(cuisineTag => {
-                        formSelectedTags.delete(cuisineTag);
-                    });
-                    initializeTagPickers();
-                }
-            }
-        }
-    } else if (context === 'filter') {
-        if (activeFilters[groupName].has(tag)) {
-            activeFilters[groupName].delete(tag);
-            button.classList.remove('bg-violet-600', 'text-white', 'selected');
-            button.classList.add('bg-slate-200', 'dark:bg-slate-600', 'text-slate-700', 'dark:text-slate-200');
-        } else {
-            activeFilters[groupName].add(tag);
-            button.classList.add('bg-violet-600', 'text-white', 'selected');
-            button.classList.remove('bg-slate-200', 'dark:bg-slate-600', 'text-slate-700', 'dark:text-slate-200');
-        }
-        renderItems();
+    const isSelected = button.classList.contains('selected');
+
+    if (!activeFilters[groupName]) {
+        activeFilters[groupName] = [];
     }
+    
+    const currentGroupFilters = activeFilters[groupName];
+    const groupLogic = TAG_GROUPS[groupName]?.logic || 'OR';
+
+    if (isSelected) {
+        // Deselect
+        button.classList.remove('selected');
+        const index = currentGroupFilters.indexOf(tag);
+        if (index > -1) {
+            currentGroupFilters.splice(index, 1);
+        }
+    } else {
+        // Select
+        if (groupLogic === 'OR') {
+            // If OR logic, deselect other tags in the same group first
+            const groupButtons = filterTagGroupsEl.querySelectorAll(`[data-group="${groupName}"]`);
+            groupButtons.forEach(btn => btn.classList.remove('selected'));
+            activeFilters[groupName] = [];
+        }
+        button.classList.add('selected');
+        activeFilters[groupName].push(tag);
+    }
+
+    console.log('Active Filters:', JSON.stringify(activeFilters));
+    renderItems();
 }
 
 // --- Event Listeners Setup ---
