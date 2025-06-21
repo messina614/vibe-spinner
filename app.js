@@ -92,37 +92,38 @@ function initializeAppAndAuth() {
         
         console.log('Firebase initialized, setting up auth listener...');
         
-        // Handle redirect result first
-        handleRedirectResult();
-        
-        onAuthStateChanged(auth, async (user) => {
-            console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
-            if (user) {
-                console.log('User details:', { uid: user.uid, email: user.email, displayName: user.displayName });
-                currentUser = user;
-                userIdDisplay.textContent = user.email || user.uid;
-                
-                try {
-                    console.log('Loading tags...');
-                    await loadTags();
-                    console.log('Tags loaded successfully');
+        // Handle redirect result first, then set up auth listener
+        handleRedirectResult().then(() => {
+            // Set up auth listener after handling redirect
+            onAuthStateChanged(auth, async (user) => {
+                console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
+                if (user) {
+                    console.log('User details:', { uid: user.uid, email: user.email, displayName: user.displayName });
+                    currentUser = user;
+                    userIdDisplay.textContent = user.email || user.uid;
                     
-                    console.log('Setting up Firestore listener...');
-                    setupFirestoreListener();
-                    console.log('Firestore listener set up');
-                    
-                    console.log('Showing main content...');
-                    showMainContent();
-                    console.log('Main content shown');
-                } catch (error) {
-                    console.error('Error in auth state change handler:', error);
-                    // Still show main content even if there's an error
-                    showMainContent();
+                    try {
+                        console.log('Loading tags...');
+                        await loadTags();
+                        console.log('Tags loaded successfully');
+                        
+                        console.log('Setting up Firestore listener...');
+                        setupFirestoreListener();
+                        console.log('Firestore listener set up');
+                        
+                        console.log('Showing main content...');
+                        showMainContent();
+                        console.log('Main content shown');
+                    } catch (error) {
+                        console.error('Error in auth state change handler:', error);
+                        // Still show main content even if there's an error
+                        showMainContent();
+                    }
+                } else {
+                    console.log('Showing login content...');
+                    showLoginContent();
                 }
-            } else {
-                console.log('Showing login content...');
-                showLoginContent();
-            }
+            });
         });
     } catch (error) { 
         console.error("Firebase initialization failed:", error); 
@@ -164,16 +165,21 @@ async function signInWithGoogle() {
     }
 }
 
-// Add this function to handle redirect result
+// Update the handleRedirectResult function
 async function handleRedirectResult() {
     try {
+        console.log('Checking for redirect result...');
         const result = await getRedirectResult(auth);
         if (result) {
             console.log('Redirect sign-in successful:', result.user);
+            // The onAuthStateChanged listener will handle the rest
+        } else {
+            console.log('No redirect result found');
         }
     } catch (error) {
         console.error("Redirect sign-in failed:", error);
-        alert("Sign-in failed: " + error.message);
+        // Don't show alert here, let the auth state change handle it
+        console.log('Redirect error details:', error);
     }
 }
 
