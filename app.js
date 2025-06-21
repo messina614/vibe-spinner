@@ -1,7 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { 
     getAuth, 
-    signInWithPopup, 
+    signInWithRedirect, 
+    getRedirectResult,
     GoogleAuthProvider, 
     createUserWithEmailAndPassword, 
     signInWithEmailAndPassword,
@@ -89,14 +90,37 @@ function initializeAppAndAuth() {
         db = getFirestore(app);
         auth = getAuth(app);
         
+        console.log('Firebase initialized, setting up auth listener...');
+        
+        // Handle redirect result first
+        handleRedirectResult();
+        
         onAuthStateChanged(auth, async (user) => {
+            console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
             if (user) {
+                console.log('User details:', { uid: user.uid, email: user.email, displayName: user.displayName });
                 currentUser = user;
                 userIdDisplay.textContent = user.email || user.uid;
-                await loadTags();
-                setupFirestoreListener();
-                showMainContent();
+                
+                try {
+                    console.log('Loading tags...');
+                    await loadTags();
+                    console.log('Tags loaded successfully');
+                    
+                    console.log('Setting up Firestore listener...');
+                    setupFirestoreListener();
+                    console.log('Firestore listener set up');
+                    
+                    console.log('Showing main content...');
+                    showMainContent();
+                    console.log('Main content shown');
+                } catch (error) {
+                    console.error('Error in auth state change handler:', error);
+                    // Still show main content even if there's an error
+                    showMainContent();
+                }
             } else {
+                console.log('Showing login content...');
                 showLoginContent();
             }
         });
@@ -132,9 +156,34 @@ function showLoginContent() {
 async function signInWithGoogle() {
     try {
         const provider = new GoogleAuthProvider();
-        await signInWithPopup(auth, provider);
+        // Try popup first, fallback to redirect if it fails
+        try {
+            await signInWithPopup(auth, provider);
+        } catch (popupError) {
+            console.log('Popup failed, trying redirect:', popupError);
+            // If popup fails due to COOP or other issues, fall back to redirect
+            if (popupError.code === 'auth/popup-closed-by-user' || 
+                popupError.message.includes('Cross-Origin-Opener-Policy')) {
+                await signInWithRedirect(auth, provider);
+            } else {
+                throw popupError;
+            }
+        }
     } catch (error) {
         console.error("Google sign-in failed:", error);
+        alert("Sign-in failed: " + error.message);
+    }
+}
+
+// Add this function to handle redirect result
+async function handleRedirectResult() {
+    try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+            console.log('Redirect sign-in successful:', result.user);
+        }
+    } catch (error) {
+        console.error("Redirect sign-in failed:", error);
         alert("Sign-in failed: " + error.message);
     }
 }
