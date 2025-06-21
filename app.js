@@ -226,8 +226,8 @@ async function signOutUser() {
 async function loadTags() {
     if (!currentUser) return;
     
-    // Use shared collection instead of user-specific
-    const tagsDocRef = doc(db, `artifacts/${appId}/shared/config/tags`);
+    // CORRECTED PATH: Use a simpler, valid path.
+    const tagsDocRef = doc(db, 'data', appId);
     const docSnap = await getDoc(tagsDocRef);
     
     if (docSnap.exists() && docSnap.data().groups) {
@@ -238,7 +238,7 @@ async function loadTags() {
             groups: DEFAULT_TAG_GROUPS,
             createdBy: currentUser.uid,
             createdAt: serverTimestamp()
-        });
+        }, { merge: true }); // Use merge to avoid overwriting other potential fields
         TAG_GROUPS = JSON.parse(JSON.stringify(DEFAULT_TAG_GROUPS));
     }
     initializeAllUI();
@@ -273,7 +273,8 @@ async function deleteExistingTag(groupName, tagToDelete) {
 async function updateItemsAfterTagDeletion(tagToDelete) {
     const itemsToUpdate = allItems.filter(item => item.tags && item.tags.includes(tagToDelete));
     const promises = itemsToUpdate.map(item => {
-        const itemRef = doc(db, `artifacts/${appId}/shared/items/${item.id}`);
+        // CORRECTED PATH
+        const itemRef = doc(db, 'data', appId, 'items', item.id);
         const newTags = item.tags.filter(t => t !== tagToDelete);
         return updateDoc(itemRef, { 
             tags: newTags,
@@ -287,13 +288,13 @@ async function updateItemsAfterTagDeletion(tagToDelete) {
 async function updateTagConfigInFirestore() {
     if (!currentUser) return;
     
-    // Update shared collection
-    const tagsDocRef = doc(db, `artifacts/${appId}/shared/config/tags`);
+    // CORRECTED PATH
+    const tagsDocRef = doc(db, 'data', appId);
     await setDoc(tagsDocRef, { 
         groups: TAG_GROUPS,
         updatedBy: currentUser.uid,
         updatedAt: serverTimestamp()
-    });
+    }, { merge: true }); // Use merge to avoid overwriting other potential fields
 }
 
 function initializeTagPickers() {
@@ -379,9 +380,9 @@ function setupFirestoreListener() {
     
     if (unsubscribeItems) unsubscribeItems();
     
-    // Listen to shared items collection
+    // CORRECTED PATH: Listen to shared items collection
     const itemsQuery = query(
-        collection(db, `artifacts/${appId}/shared/items`),
+        collection(db, 'data', appId, 'items'),
         orderBy('createdAt', 'desc')
     );
     
@@ -468,7 +469,8 @@ async function handleAddItem(e) {
     };
     
     try {
-        await addDoc(collection(db, `artifacts/${appId}/shared/items`), newItem);
+        // CORRECTED PATH
+        await addDoc(collection(db, 'data', appId, 'items'), newItem);
         itemNameInput.value = '';
         formSelectedTags.clear();
         initializeTagPickers();
@@ -482,7 +484,8 @@ async function handleDeleteItem(itemId) {
     if (!currentUser) return;
     
     try {
-        await deleteDoc(doc(db, `artifacts/${appId}/shared/items/${itemId}`));
+        // CORRECTED PATH
+        await deleteDoc(doc(db, 'data', appId, 'items', itemId));
     } catch (error) {
         console.error("Error deleting item:", error);
         alert("Failed to delete item: " + error.message);
